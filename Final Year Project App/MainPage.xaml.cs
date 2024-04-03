@@ -1,20 +1,17 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Xamarin.Forms;
 using System.Net.Http;
 using Xamarin.Essentials;
 using Newtonsoft.Json;
-using System.Net.NetworkInformation;
 using System.Threading;
 
 
 
 public class ApiResponse
 {
+    //define class to handle the response from the rotating code API
     public int Status { get; set; }
     public CodeData[] Data { get; set; }
 }
@@ -29,6 +26,7 @@ public class CodeData
 
 public class CodeRefreshService
 {
+    //Initiate the code refresh class
     private Timer timer;
     private readonly TimeSpan refreshInterval = TimeSpan.FromSeconds(30);
     private bool isInitialRequest = true;
@@ -40,28 +38,33 @@ public class CodeRefreshService
     {
         httpClientService = new HttpClientService();
     }
-
+    //Function for initial code request from API when app starts.
     public void StartService()
     {
         RefreshCode(null);
     }
-
+    //Request code from REST Endpoint
     private async void RefreshCode(object state)
     {
         try
         {
-            string codeAPIendpoint = "https://pz6392ttu9.execute-api.eu-north-1.amazonaws.com/development";
+            string codeAPIendpoint = "https://pz6392ttu9.execute-api.eu-north-1.amazonaws.com/development"; //REST API endpoint
+            //Initiate new httpClientService for the local function.
             HttpClientService httpClientService = new HttpClientService();
+            //Set json payload
             var postData = new
             {
                 METHOD = "GET"
             };
+            //Use await process to call the class "httpClientService" along with the PostDataAsync task found within the class.
             string response = await httpClientService.PostDataAsync(postData, codeAPIendpoint);
             Console.WriteLine(response);
+            //If response is not null continue, or else catch the exception.
             if (!string.IsNullOrEmpty(response))
             {
+                //Deserialize the json response from the API
                 var apiResponse = JsonConvert.DeserializeObject<ApiResponse>(response);
-
+                //Validate whether the JSON response is correct and contains a 200 status code.
                 if (apiResponse.Status == 200 && apiResponse.Data != null && apiResponse.Data.Length > 0)
                 {
                     var codeData = apiResponse.Data[0];
@@ -79,7 +82,7 @@ public class CodeRefreshService
         }
         catch (Exception ex)
         {
-            // Handle any exceptions
+            // Complete exception handling in future.
         }
     }
 
@@ -104,7 +107,8 @@ public class HttpClientService
         _httpClient = new HttpClient();
         _httpClient.Timeout = TimeSpan.FromMilliseconds(10000);
     }
-
+    
+    //define GET Data Task
     public async Task<string> GetDataAsync(string endpoint)
     {
         try
@@ -129,16 +133,16 @@ public class HttpClientService
             return null;
         }
     }
-
+    //define POST data Task
     public async Task<string> PostDataAsync(object data, string endpoint)
     {
         try
         {
             string jsonData = JsonConvert.SerializeObject(data);
             StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-
+            //await response from POST request
             HttpResponseMessage response = await _httpClient.PostAsync(endpoint, content);
-
+            //handle API response
             if (response.IsSuccessStatusCode)
             {
                 string responseContent = await response.Content.ReadAsStringAsync();
@@ -147,14 +151,12 @@ public class HttpClientService
             }
             else
             {
-                // Handle the error here
                 Console.WriteLine("Error Retrieving data from api");
                 return null;
             }
         }
         catch (Exception ex)
         {
-            // Handle exceptions here
             return null;
         }
     }
@@ -164,23 +166,11 @@ public class HttpClientService
 
 namespace Final_Year_Project_App
 {
-    class MyObject
-    {
-        public int code { get; set; }
-        public string expiry { get; set; }
-    }
     public partial class MainPage : ContentPage
     {
-        private const int SAMPLING_TIME = 50; // Adjust this value according to your needs
-        private string text { get; set; } = "1234";
-        private string text3 = "6789";
-        private const byte text2 = 1;
-        private bool ledState = false;
-        private bool buttonState = false;
-        private bool transmitData = true;
-        private int bytesCounter;
-        private int totalBytes;
-
+        private const int SAMPLING_TIME = 50; // Adjust this value depending upon the sampling rate of the receiver
+        private string text { get; set; } = "1234"; //set code to 1234 upon app start
+        //
         public void UpdateCode(int newCode)
         {
             text = newCode.ToString();
@@ -188,28 +178,25 @@ namespace Final_Year_Project_App
             {
                 currentCode.Text = newCode.ToString();
             });
-            // Optionally, perform additional actions when the code is updated
         }
 
         private CodeRefreshService codeRefreshService;
 
-        // Existing fields and methods...
-
         public MainPage()
         {
+            //App start initialisation
             InitializeComponent();
-            //LoadData();
 
             codeRefreshService = new CodeRefreshService();
-            codeRefreshService.OnCodeUpdated = UpdateCode; // Set the delegate
+            codeRefreshService.OnCodeUpdated = UpdateCode; 
             codeRefreshService.StartService();
 
-            // Other initialization...
         }
 
 
         private void StartTransmission2(int pin)
         {
+            //convert PIN which is parsed in to 4 bit binary
             string binaryRepresentation = "";
             foreach (char digit in pin.ToString())
             {
@@ -220,57 +207,19 @@ namespace Final_Year_Project_App
             TransmitByte2(binaryRepresentation);
         }
 
-
-
-        private async void TransmitByte(char dataByte)
-        {
-            // Simulate turning on/off the flashlight
-            //await Flashlight.TurnOnAsync();
-            //await Task.Delay(SAMPLING_TIME);
-
-            for (int i = 0; i < 4; i++)
-            {
-                // Simulate setting the flashlight state based on the i-th bit of dataByte
-                string binary = Convert.ToString(text2, 2);
-                Console.WriteLine(binary);
-                if (((dataByte >> i) & 0x01) == 1)
-                {
-                    await Flashlight.TurnOnAsync();
-                    await Flashlight.TurnOffAsync();
-                }
-                else
-                {
-                    await Flashlight.TurnOffAsync();
-                }
-
-                await Task.Delay(SAMPLING_TIME);
-            }
-
-            // Simulate returning to IDLE state
-            await Flashlight.TurnOffAsync();
-            await Task.Delay(SAMPLING_TIME);
-
-        }
         private async void TransmitByte2(string binaryRepresentation)
         {
+            //begin transmission of the binary representation of the active PIN code
             var watch = new System.Diagnostics.Stopwatch();
-            // Simulate turning on/off the flashlight
             Console.WriteLine(binaryRepresentation);
             watch.Start();
+            //Initiate start sequence of 1,0 at the start of every transmission
             await Flashlight.TurnOnAsync();
-            //Console.WriteLine("On");
             await Task.Delay(SAMPLING_TIME);
             await Flashlight.TurnOffAsync();
-            //Console.WriteLine("0");
             await Task.Delay(SAMPLING_TIME);
-/*            watch.Stop();
-            Console.WriteLine(watch.ElapsedMilliseconds);*/
-            //watch.Start();
             for (int i=0; i < binaryRepresentation.Length; i++)
             {
-               /* var watch1 = new System.Diagnostics.Stopwatch();
-                watch1.Start();*/
-                //Console.WriteLine(binaryRepresentation[i]);
                 if (binaryRepresentation[i] == '1')
                 {
                     await Flashlight.TurnOnAsync();
@@ -281,18 +230,15 @@ namespace Final_Year_Project_App
                     await Flashlight.TurnOffAsync();
                     await Task.Delay(SAMPLING_TIME);
                 }
-              /*  watch1.Stop();*/
-                /*Console.WriteLine(watch.ElapsedMilliseconds);*/
             }
-            // Simulate returning to IDLE state
+            // returning to IDLE state
             await Flashlight.TurnOffAsync();
-            /*watch.Stop();
-            Console.WriteLine(watch.ElapsedMilliseconds);*/
         }
 
         private void transmitButton_Clicked(object sender, EventArgs e)
         {
-            int pin = int.Parse(text3);
+            //When transmit button is clicked, call function to begin transmission.
+            int pin = int.Parse(text);
             StartTransmission2(pin);
         }
     }
